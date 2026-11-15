@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LINE 外登入測試</title>
+<style>
+  body { font: 16px/1.5 system-ui, -apple-system, sans-serif; margin: 0; padding: 16px 16px 48px; background: #fff; color: #222; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  h2 { font-size: 16px; margin: 20px 0 0; }
+  .env { background: #f4f4f4; padding: 10px; border-radius: 8px; font-size: 14px; word-break: break-all; }
+  .env b { font-size: 16px; }
+  .banner { margin-top: 12px; padding: 12px; border-radius: 8px; font-weight: 600; word-break: break-all; }
+  .ok { background: #e7f6ec; color: #1b7f3b; }
+  .warn { background: #fff3d6; color: #8a5a00; }
+  .err { background: #fdecec; color: #b3261e; }
+  .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; }
+  .how { color: #555; font-size: 14px; margin: 6px 0 10px; }
+  button { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 0; background: #222; color: #fff; margin-top: 6px; }
+  button.sub { background: #eee; color: #222; text-align: left; }
+  button.sel { background: #1b7f3b; color: #fff; }
+  input, textarea { width: 100%; box-sizing: border-box; padding: 8px; font-size: 14px; }
+  .tiny { font-size: 12px; color: #777; margin-top: 6px; }
+  details { margin-top: 16px; font-size: 14px; }
+  label { display: block; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>LINE 外登入測試</h1>
+<div class="env" id="env">載入中⋯⋯</div>
+<div id="banner"></div>
+
+<div id="main"></div>
+
+<h2>這個瀏覽器的紀錄</h2>
+<div class="card">
+  <div class="how">每做完一輪就按「複製」，貼回對話。跳到別的 App 或瀏覽器後，那邊的紀錄要在那邊複製。</div>
+  <textarea id="sum" rows="10" readonly></textarea>
+  <button id="cp">全選並複製</button>
+  <div class="tiny" id="cpr"></div>
+</div>
+
+<details>
+  <summary>重設（每一輪開始前按）</summary>
+  <div class="how">登出 LINE、清掉這個瀏覽器裡這一頁存的東西。LINE 自己記的「以此帳號繼續」清不掉，要到 App 的瀏覽器設定清除瀏覽資料（見測試說明）。</div>
+  <button id="reset" class="sub">登出並清除這頁的紀錄</button>
+</details>
+
+<details>
+  <summary>設定（通常不用動）</summary>
+  <label>LIFF ID<input id="c_liff"></label>
+  <div class="tiny">LIFF 的 Endpoint URL 要登記成這一頁的網址：<span id="ep"></span></div>
+</details>
+
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+  // ---------- 環境 ----------
+  const q = new URLSearchParams(location.search);
+  const ua = navigator.userAgent;
+  const os = /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : /Android/i.test(ua) ? 'Android' : '其他';
+  const host =
+    /\bLIFF\b/i.test(ua) ? 'LIFF 瀏覽器' :
+    /\bLine\//i.test(ua) ? 'LINE 內建瀏覽器' :
+    /FBAN|FBAV|FB_IAB|FBIOS/i.test(ua) ? 'Facebook' :
+    /Instagram/i.test(ua) ? 'Instagram' :
+    /musical_ly|BytedanceWebview|TikTok|trill|aweme/i.test(ua) ? 'TikTok' :
+    /CriOS|Chrome/i.test(ua) && !/wv\)/.test(ua) ? 'Chrome' :
+    /Safari/i.test(ua) && os === 'iOS' ? 'Safari' :
+    /wv\)/.test(ua) ? '其他 App 的內建瀏覽器' : '其他瀏覽器';
+  const base = location.origin + location.pathname;
+  document.getElementById('ep').textContent = base;
+
+  const load = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const storageOk = (() => { try { localStorage.setItem('_t', '1'); localStorage.removeItem('_t'); return true; } catch (e) { return false; } })();
+
+  const DEFAULT_LIFF = '';  // 建好 LIFF 後填進來，或用網址 ?liff= 帶
+  const liffId = (q.get('liff') || load('lt_liff') || DEFAULT_LIFF).trim();
+  const liffEl = document.getElementById('c_liff');
+  liffEl.value = liffId;
+  liffEl.onchange = () => { save('lt_liff', liffEl.value.trim()); location.reload(); };
+  if (liffId) save('lt_liff', liffId);
+
+  // ---------- 紀錄 ----------
+  // 每一輪一個編號，帶在網址上跨瀏覽器；這個瀏覽器的紀錄存在 localStorage
+  const log = JSON.parse(load('lt_log') || '[]');
+  const add = (o) => { log.push({ 時間: new Date().toLocaleTimeString('zh-TW', { hour12: false }), 系統: os, 在哪: host, ...o }); save('lt_log', JSON.stringify(log)); render(); };
+  const render = () => {
+    document.getElementById('sum').value =
+      `UA：${ua}\n` + log.map(r => Object.entries(r).map(([k, v]) => `${k}：${v}`).join('｜')).join('\n');
+  };
+  document.getElementById('cp').onclick = async () => {
+    const t = document.getElementById('sum'); t.select();
+    try { await navigator.clipboard.writeText(t.value); document.getElementById('cpr').textContent = '已複製'; }
+    catch (e) { document.execCommand('copy'); document.getElementById('cpr').textContent = '已選取，若沒複製請手動長按複製'; }
+  };
+
+  // 網址上的狀態：run 這一輪、m 做法（A 在這裡登入／B 跳進 LINE）、t 按下去的時間、fbclid 模擬廣告點擊參數
+  const run = q.get('run');
+  const m = q.get('m');
+  const t = Number(q.get('t') || 0);
+  const fbclid = q.get('fbclid');
+  const savedFb = load('lt_fbclid');
+  if (fbclid && !m) save('lt_fbclid', fbclid);  // 第一次打開時先存，模擬正式版一進來就存點擊參數
+
+  const banner = (cls, text) => { document.getElementById('banner').innerHTML = `<div class="banner ${cls}">${text}</div>`; };
+  const env = (extra) => {
+    document.getElementById('env').innerHTML =
+      `目前在：<b>${host}</b>｜${os}<br>` + extra +
+      `<br><span class="tiny">UA：${ua.replace(/</g, '&lt;')}</span>`;
+  };
+
+  const newRun = () => `${os}-${host}-${Date.now().toString(36).slice(-4)}`;
+  const url = (params) => { const u = new URL(base); Object.entries(params).forEach(([k, v]) => v && u.searchParams.set(k, v)); return u.href; };
+
+  // ---------- 主流程 ----------
+  const main = document.getElementById('main');
+  const ask = (title, opts, onPick) => {
+    const d = document.createElement('div'); d.className = 'card';
+    d.innerHTML = `<b>${title}</b>`;
+    opts.forEach(o => { const b = document.createElement('button'); b.className = 'sub'; b.textContent = o;
+      b.onclick = () => { d.querySelectorAll('button').forEach(x => x.className = 'sub'); b.className = 'sel'; onPick(o); };
+      d.appendChild(b); });
+    const i = document.createElement('input'); i.placeholder = '補充（選填，寫完按別處就記下）';
+    i.onchange = () => onPick(null, i.value); d.appendChild(i);
+    main.appendChild(d);
+  };
+
+  async function start() {
+    if (!liffId) { env(''); banner('err', '還沒設定 LIFF ID：展開最下面的「設定」填入'); render(); return; }
+    let init = '成功', err = '';
+    try { await liff.init({ liffId }); } catch (e) { init = '失敗'; err = e.code + ' ' + e.message; }
+    const inClient = init === '成功' ? liff.isInClient() : '-';
+    const loggedIn = init === '成功' ? liff.isLoggedIn() : false;
+    let who = '-';
+    if (loggedIn) {
+      try { const p = await liff.getProfile(); who = '…' + p.userId.slice(-6); }
+      catch (e) { try { who = '…' + (liff.getDecodedIDToken() || {}).sub.slice(-6); } catch (e2) { who = '登入了但讀不到身分'; } }
+    }
+    let friend = '-';
+    if (loggedIn) { try { friend = (await liff.getFriendship()).friendFlag ? '是好友' : '不是好友'; } catch (e) { friend = '讀不到'; } }
+
+    env(`LIFF 初始化：${init}${err ? '（' + err + '）' : ''}｜LIFF 瀏覽器：${inClient}｜已登入：${loggedIn ? '是 ' + who : '否'}｜好友：${friend}｜可存資料：${storageOk ? '是' : '否'}`);
+
+    // ---------- 從某一輪回來 ----------
+    if (run && m) {
+      const secs = t ? Math.round((Date.now() - t) / 1000) : '-';
+      const sameBrowser = load('lt_run') === run;  // 存在這個瀏覽器的編號還在 → 回到同一個瀏覽器
+      const fbKept = fbclid ? (fbclid === (savedFb || fbclid) ? '網址上還在' : '和存的不一樣') : '網址上不見了';
+      const fbStored = savedFb ? '這個瀏覽器有存' : '這個瀏覽器沒存';
+      add({ 輪: run, 做法: m === 'A' ? 'A 在這裡登入' : 'B 跳進 LINE', 結果: loggedIn ? '已登入 ' + who : '沒登入', 回到同一個瀏覽器: sameBrowser ? '是' : '否', 點擊參數: fbKept + '、' + fbStored, 花費秒數: secs, 好友: friend });
+      banner(loggedIn ? 'ok' : 'err', loggedIn
+        ? `第 ${run} 輪做法 ${m}：已登入（${who}），${sameBrowser ? '回到原本的瀏覽器' : '換到另一個瀏覽器或 App 了'}，花 ${secs} 秒。回答下面的問題，再複製結果。`
+        : `第 ${run} 輪做法 ${m}：回到這頁但沒登入。回答下面的問題，再複製結果。`);
+      ask('剛才按下去後看到了什麼？（可複選，按最接近的）', [
+        '直接跳到 LINE App 又自動回來（沒輸入任何東西）',
+        '出現「以此帳號繼續」之類的確認頁',
+        '要輸入 email 和密碼',
+        '要掃 QR code',
+        '有加好友的勾選',
+        '跳到 LINE App 後停在那裡沒回來',
+        '跳到 Safari、Chrome 等其他瀏覽器',
+        '出現錯誤或被擋',
+      ], (o, note) => add({ 輪: run, 看到: o || '', 補充: note || '' }));
+      render(); return;
+    }
+
+    // ---------- 新的一輪 ----------
+    render();
+    if (fbclid) banner('ok', `點擊參數已存：${fbclid}`);
+    else banner('warn', '網址上沒有 fbclid。正式測試請用測試說明裡的連結打開（結尾有 ?fbclid=）');
+
+    const box = document.createElement('div'); box.className = 'card';
+    box.innerHTML = `<b>這一輪只按一個</b><div class="how">A 和 B 要分開兩輪做：做完一輪，按最下面「重設」，並照測試說明清掉 App 的瀏覽資料，再從原本的地方重新點連結。</div>`;
+    const bA = document.createElement('button'); bA.textContent = 'A：在這裡用 LINE 登入';
+    bA.onclick = () => {
+      const r = newRun(); save('lt_run', r);
+      add({ 輪: r, 做法: 'A 在這裡登入', 動作: '按下 A', 點擊參數: fbclid || '無' });
+      liff.login({ redirectUri: url({ run: r, m: 'A', t: Date.now(), fbclid, liff: liffId }) });
+    };
+    const bB = document.createElement('button'); bB.textContent = 'B：跳進 LINE 再登入';
+    bB.onclick = () => {
+      const r = newRun(); save('lt_run', r);
+      add({ 輪: r, 做法: 'B 跳進 LINE', 動作: '按下 B', 點擊參數: fbclid || '無' });
+      const u = new URL(`https://liff.line.me/${liffId}`);
+      u.searchParams.set('run', r); u.searchParams.set('m', 'B'); u.searchParams.set('t', Date.now()); if (fbclid) u.searchParams.set('fbclid', fbclid);
+      location.href = u.href;
+    };
+    box.append(bA, bB);
+    if (loggedIn) {
+      const n = document.createElement('div'); n.className = 'banner warn';
+      n.textContent = '這個瀏覽器已經是登入狀態。若是「第二次打開」那一輪，這就是結果：複製紀錄即可；否則先按最下面「重設」。';
+      box.prepend(n);
+      add({ 輪: '再次打開', 結果: '不用登入就是登入狀態 ' + who, 點擊參數: fbclid || '無' });
+    }
+    main.appendChild(box);
+  }
+
+  document.getElementById('reset').onclick = () => {
+    try { if (window.liff && liff.isLoggedIn && liff.isLoggedIn()) liff.logout(); } catch (e) {}
+    const keep = load('lt_liff');
+    try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}
+    if (keep) save('lt_liff', keep);
+    location.href = base + (fbclid ? '?fbclid=' + encodeURIComponent(fbclid) : '');
+  };
+
+  start();
+</script>
+</body>
+</html>
