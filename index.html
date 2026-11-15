@@ -119,9 +119,15 @@
     return `<span class="no">測試 ${c.n}／10</span>
       <div class="where">${APPS[c.app].name}：${KIND[c.kind]}</div>`;
   }
-  function wrongPlace(c, want) {
-    app.innerHTML = header(c) + `<div class="box bad"><div class="line"><b>❌ 打開的地方不對</b></div>
-      現在是在 <b>${hereName}</b> 打開的，這一項要在 <b>${want}</b> 打開。<br><br>請回到 ${want}，從那裡點測試 ${c.n} 的連結。</div>`;
+  // 認不出是哪個 App 時（例如 TikTok 在 iPhone 上看起來和 Safari 一樣），讓使用者確認後繼續
+  const forced = (c) => load('lt_force_' + c.app) === '1';
+  const isHere = (c) => here === c.app || forced(c);
+  function wrongPlace(c, want, go) {
+    app.innerHTML = header(c) + `<div class="box bad"><div class="line"><b>❌ 打開的地方不對？</b></div>
+      測試頁認為你現在是在 <b>${hereName}</b>，這一項要在 <b>${want}</b> 打開。<br><br>
+      如果你不是從 ${want} 點的，請回到 ${want}，從那裡點測試 ${c.n} 的連結。</div>
+      <button class="big dark" id="force">我確定是在 ${want} 點的，繼續</button>`;
+    document.getElementById('force').onclick = () => { save('lt_force_' + c.app, '1'); go(); };
   }
   function result(c, checks, question, extra) {
     const allAuto = checks.every(x => x[1]);
@@ -132,7 +138,7 @@
     const finish = (answer) => {
       const pass = allAuto && (!question || question.good.includes(answer));
       const text = `測試${c.n} ${c.id}｜${os}｜${pass ? '通過' : '沒通過'}｜` + checks.map(([l, ok]) => `${l}${ok ? '✅' : '❌'}`).join(' ') +
-        (extra ? `｜${extra}` : '') + (answer ? `｜看到：${answer}` : '') + `｜UA：${ua}`;
+        (extra ? `｜${extra}` : '') + (answer ? `｜看到：${answer}` : '') + (forced(c) && here !== c.app ? `｜測試頁認不出 App，使用者確認是 ${APPS[c.app].name}` : '') + `｜UA：${ua}`;
       document.getElementById('final').innerHTML = `<div class="verdict ${pass ? 'ok' : 'bad'}">${pass ? '✅ 這一項通過' : '❌ 這一項沒通過'}</div>
         <button class="big dark" id="cp">📋 複製結果，貼回給 Claude</button>
         <p class="note">複製不了就直接截圖這個畫面。${c.n < 10 ? `接著做測試 ${c.n + 1}。` : '全部做完了，謝謝！'}</p>`;
@@ -157,10 +163,10 @@
 
     // A：在 App 裡直接登入
     if (c.kind === 'A' && !back) {
-      if (here !== c.app) return wrongPlace(c, want);
+      if (!isHere(c)) return wrongPlace(c, want, () => test(c, q));
       if (loggedIn) liff.logout();  // 從登出開始
       save('lt_' + c.app, c.id);    // 記號：回來時看是不是同一個瀏覽器
-      app.innerHTML = header(c) + `<div class="box ok"><div class="line">✅ 打開的地方對了：${hereName}</div></div>
+      app.innerHTML = header(c) + `<div class="box ok"><div class="line">✅ 打開的地方對了：${here === c.app ? hereName : want}</div></div>
         <button class="big" id="go">👉 按這裡：用 LINE 登入</button>
         <ol class="note"><li>按下去後照畫面做。要你按「登入」、輸入帳號密碼或掃 QR code，都照做完成</li>
         <li>登入完應該會自動回到這一頁，看到結果</li>
@@ -171,7 +177,7 @@
     if (c.kind === 'A' && back) {
       return result(c, [
         ['登入成功', loggedIn],
-        [`回到 ${want}`, here === c.app && load('lt_' + c.app) === c.id],
+        [`回到 ${want}`, isHere(c) && load('lt_' + c.app) === c.id],
         ['點擊參數還在', fb === 'TEST-' + c.id],
       ], { q: '剛剛登入時，畫面要你做什麼？', good: ['什麼都不用做，自動就回來了', '只要按一個「登入」或「繼續」'],
            opts: ['什麼都不用做，自動就回來了', '只要按一個「登入」或「繼續」', '要輸入 email 和密碼', '要掃 QR code', '跳去別的 App 或瀏覽器了'] }, secs);
@@ -179,7 +185,7 @@
 
     // again：再打開一次
     if (c.kind === 'again') {
-      if (here !== c.app) return wrongPlace(c, want);
+      if (!isHere(c)) return wrongPlace(c, want, () => test(c, q));
       return result(c, [
         ['做過前一項（同一個瀏覽器）', !!load('lt_' + c.app)],
         ['不用再登入就認得你', loggedIn],
@@ -188,8 +194,8 @@
 
     // B：跳進 LINE
     if (c.kind === 'B' && !back) {
-      if (here !== c.app) return wrongPlace(c, want);
-      app.innerHTML = header(c) + `<div class="box ok"><div class="line">✅ 打開的地方對了：${hereName}</div></div>
+      if (!isHere(c)) return wrongPlace(c, want, () => test(c, q));
+      app.innerHTML = header(c) + `<div class="box ok"><div class="line">✅ 打開的地方對了：${here === c.app ? hereName : want}</div></div>
         <button class="big" id="go">👉 按這裡：跳進 LINE</button>
         <ol class="note"><li>按下去後應該會打開 LINE，在 LINE 裡看到結果</li>
         <li>按了 10 秒都沒反應，在 Claude 對話裡打「測試 ${c.n} 沒跳」</li></ol>`;
