@@ -5,206 +5,218 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LINE 外登入測試</title>
 <style>
-  body { font: 16px/1.5 system-ui, -apple-system, sans-serif; margin: 0; padding: 16px 16px 48px; background: #fff; color: #222; }
-  h1 { font-size: 20px; margin: 0 0 8px; }
-  h2 { font-size: 16px; margin: 20px 0 0; }
-  .env { background: #f4f4f4; padding: 10px; border-radius: 8px; font-size: 14px; word-break: break-all; }
-  .env b { font-size: 16px; }
-  .banner { margin-top: 12px; padding: 12px; border-radius: 8px; font-weight: 600; word-break: break-all; }
-  .ok { background: #e7f6ec; color: #1b7f3b; }
-  .warn { background: #fff3d6; color: #8a5a00; }
-  .err { background: #fdecec; color: #b3261e; }
-  .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; }
-  .how { color: #555; font-size: 14px; margin: 6px 0 10px; }
-  button { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 0; background: #222; color: #fff; margin-top: 6px; }
-  button.sub { background: #eee; color: #222; text-align: left; }
-  button.sel { background: #1b7f3b; color: #fff; }
-  input, textarea { width: 100%; box-sizing: border-box; padding: 8px; font-size: 14px; }
-  .tiny { font-size: 12px; color: #777; margin-top: 6px; }
-  details { margin-top: 16px; font-size: 14px; }
-  label { display: block; margin-top: 8px; }
+  body { font: 18px/1.5 system-ui, -apple-system, sans-serif; margin: 0; padding: 16px 16px 60px; background: #fff; color: #111; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .no { display: inline-block; background: #111; color: #fff; border-radius: 999px; padding: 2px 12px; font-size: 16px; font-weight: 700; }
+  .where { font-size: 22px; font-weight: 800; margin: 10px 0 4px; }
+  .what { font-size: 18px; color: #333; margin: 0 0 16px; }
+  .big { display: block; width: 100%; box-sizing: border-box; padding: 22px 12px; font-size: 22px; font-weight: 800; border-radius: 14px; border: 0; background: #06c755; color: #fff; text-align: center; text-decoration: none; margin: 12px 0; }
+  .big.dark { background: #111; }
+  .big.gray { background: #e9e9e9; color: #111; font-size: 18px; font-weight: 600; padding: 16px 12px; text-align: left; }
+  .big.gray.sel { background: #06c755; color: #fff; }
+  .note { font-size: 16px; color: #555; }
+  .box { border-radius: 14px; padding: 16px; margin: 12px 0; font-size: 18px; }
+  .ok { background: #e7f6ec; color: #135d2b; }
+  .bad { background: #fdecec; color: #9b1c14; }
+  .wait { background: #fff3d6; color: #6b4600; }
+  .line { font-size: 20px; margin: 6px 0; }
+  .verdict { font-size: 26px; font-weight: 800; text-align: center; padding: 18px; border-radius: 14px; margin: 16px 0; }
+  .card { border: 2px solid #ddd; border-radius: 14px; padding: 14px; margin: 16px 0; }
+  .card h2 { font-size: 22px; margin: 0 0 8px; }
+  ol { padding-left: 22px; margin: 8px 0; }
+  ol li { margin: 6px 0; }
+  .small { font-size: 12px; color: #888; word-break: break-all; margin-top: 24px; }
+  .hide { display: none; }
 </style>
 </head>
 <body>
-<h1>LINE 外登入測試</h1>
-<div class="env" id="env">載入中⋯⋯</div>
-<div id="banner"></div>
-
-<div id="main"></div>
-
-<h2>這個瀏覽器的紀錄</h2>
-<div class="card">
-  <div class="how">每做完一輪就按「複製」，貼回對話。跳到別的 App 或瀏覽器後，那邊的紀錄要在那邊複製。</div>
-  <textarea id="sum" rows="10" readonly></textarea>
-  <button id="cp">全選並複製</button>
-  <div class="tiny" id="cpr"></div>
-</div>
-
-<details>
-  <summary>重設（每一輪開始前按）</summary>
-  <div class="how">登出 LINE、清掉這個瀏覽器裡這一頁存的東西。LINE 自己記的「以此帳號繼續」清不掉，要到 App 的瀏覽器設定清除瀏覽資料（見測試說明）。</div>
-  <button id="reset" class="sub">登出並清除這頁的紀錄</button>
-</details>
-
-<details>
-  <summary>設定（通常不用動）</summary>
-  <label>LIFF ID<input id="c_liff"></label>
-  <div class="tiny">LIFF 的 Endpoint URL 要登記成這一頁的網址：<span id="ep"></span></div>
-</details>
+<div id="app">載入中⋯⋯</div>
+<div class="small" id="ua"></div>
 
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
-  // ---------- 環境 ----------
-  const q = new URLSearchParams(location.search);
+  const LIFF_ID = '2012618116-nXrAeM9R';
+  const BASE = location.origin + location.pathname;
+
+  // 10 項測試。kind：A 在 App 裡直接登入；again 再打開一次；B 跳進 LINE
+  const APPS = {
+    FB: { name: 'Facebook', put: '貼到 Facebook 一則「只限本人」的貼文，發佈後在貼文裡點連結' },
+    IG: { name: 'Instagram', put: '用另一個 IG 帳號私訊給自己（或請朋友私訊你），在 IG 的私訊裡點連結' },
+    TT: { name: 'TikTok', put: '在 TikTok 私訊給朋友或自己的另一個帳號，在 TikTok 的私訊裡點連結' },
+    WEB: { name: 'Safari 或 Chrome', put: '直接在手機的 Safari（iPhone）或 Chrome（Android）打開' },
+  };
+  const CASES = [
+    { id: 'FB-A', n: 1, app: 'FB', kind: 'A' },
+    { id: 'FB-2', n: 2, app: 'FB', kind: 'again' },
+    { id: 'FB-B', n: 3, app: 'FB', kind: 'B' },
+    { id: 'IG-A', n: 4, app: 'IG', kind: 'A' },
+    { id: 'IG-2', n: 5, app: 'IG', kind: 'again' },
+    { id: 'IG-B', n: 6, app: 'IG', kind: 'B' },
+    { id: 'TT-A', n: 7, app: 'TT', kind: 'A' },
+    { id: 'TT-2', n: 8, app: 'TT', kind: 'again' },
+    { id: 'TT-B', n: 9, app: 'TT', kind: 'B' },
+    { id: 'WEB-A', n: 10, app: 'WEB', kind: 'A' },
+  ];
+  const KIND = {
+    A: '在這裡直接用 LINE 登入',
+    again: '再打開一次，看還記不記得你',
+    B: '按按鈕跳進 LINE',
+  };
+
   const ua = navigator.userAgent;
-  const os = /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : /Android/i.test(ua) ? 'Android' : '其他';
-  const host =
-    /\bLIFF\b/i.test(ua) ? 'LIFF 瀏覽器' :
-    /\bLine\//i.test(ua) ? 'LINE 內建瀏覽器' :
-    /FBAN|FBAV|FB_IAB|FBIOS/i.test(ua) ? 'Facebook' :
-    /Instagram/i.test(ua) ? 'Instagram' :
-    /musical_ly|BytedanceWebview|TikTok|trill|aweme/i.test(ua) ? 'TikTok' :
-    /CriOS|Chrome/i.test(ua) && !/wv\)/.test(ua) ? 'Chrome' :
-    /Safari/i.test(ua) && os === 'iOS' ? 'Safari' :
-    /wv\)/.test(ua) ? '其他 App 的內建瀏覽器' : '其他瀏覽器';
-  const base = location.origin + location.pathname;
-  document.getElementById('ep').textContent = base;
+  document.getElementById('ua').textContent = 'UA：' + ua;
+  const os = /iPhone|iPad|iPod/i.test(ua) ? 'iPhone' : /Android/i.test(ua) ? 'Android' : '電腦';
+  const detect = () => {
+    if (/\bLine\//i.test(ua) || /LIFF/i.test(ua)) return 'LINE';
+    if (/Instagram/i.test(ua)) return 'IG';
+    if (/FBAN|FBAV|FB_IAB|FBIOS|\[FB/i.test(ua)) return 'FB';
+    if (/musical_ly|BytedanceWebview|TikTok|trill|aweme|ByteLocale/i.test(ua)) return 'TT';
+    if (/; wv\)|WebView/i.test(ua)) return '其他 App';
+    return 'WEB';
+  };
+  const here = detect();
+  const hereName = here === 'LINE' ? 'LINE 裡' : here === 'WEB' ? '一般瀏覽器（Safari 或 Chrome）' : here === '其他 App' ? '某個 App 的內建瀏覽器' : APPS[here].name + ' 裡';
 
   const load = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
-  const storageOk = (() => { try { localStorage.setItem('_t', '1'); localStorage.removeItem('_t'); return true; } catch (e) { return false; } })();
-
-  const DEFAULT_LIFF = '';  // 建好 LIFF 後填進來，或用網址 ?liff= 帶
-  const liffId = (q.get('liff') || load('lt_liff') || DEFAULT_LIFF).trim();
-  const liffEl = document.getElementById('c_liff');
-  liffEl.value = liffId;
-  liffEl.onchange = () => { save('lt_liff', liffEl.value.trim()); location.reload(); };
-  if (liffId) save('lt_liff', liffId);
-
-  // ---------- 紀錄 ----------
-  // 每一輪一個編號，帶在網址上跨瀏覽器；這個瀏覽器的紀錄存在 localStorage
-  const log = JSON.parse(load('lt_log') || '[]');
-  const add = (o) => { log.push({ 時間: new Date().toLocaleTimeString('zh-TW', { hour12: false }), 系統: os, 在哪: host, ...o }); save('lt_log', JSON.stringify(log)); render(); };
-  const render = () => {
-    document.getElementById('sum').value =
-      `UA：${ua}\n` + log.map(r => Object.entries(r).map(([k, v]) => `${k}：${v}`).join('｜')).join('\n');
+  const app = document.getElementById('app');
+  const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const linkOf = (c, extra) => {
+    const u = new URL(BASE); u.searchParams.set('case', c.id); u.searchParams.set('fbclid', 'TEST-' + c.id);
+    Object.entries(extra || {}).forEach(([k, v]) => u.searchParams.set(k, v)); return u.href;
   };
-  document.getElementById('cp').onclick = async () => {
-    const t = document.getElementById('sum'); t.select();
-    try { await navigator.clipboard.writeText(t.value); document.getElementById('cpr').textContent = '已複製'; }
-    catch (e) { document.execCommand('copy'); document.getElementById('cpr').textContent = '已選取，若沒複製請手動長按複製'; }
+  const copy = async (text, btn, done) => {
+    try { await navigator.clipboard.writeText(text); }
+    catch (e) { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+    btn.textContent = done;
   };
 
-  // 網址上的狀態：run 這一輪、m 做法（A 在這裡登入／B 跳進 LINE）、t 按下去的時間、fbclid 模擬廣告點擊參數
-  const run = q.get('run');
-  const m = q.get('m');
-  const t = Number(q.get('t') || 0);
-  const fbclid = q.get('fbclid');
-  const savedFb = load('lt_fbclid');
-  if (fbclid && !m) save('lt_fbclid', fbclid);  // 第一次打開時先存，模擬正式版一進來就存點擊參數
-
-  const banner = (cls, text) => { document.getElementById('banner').innerHTML = `<div class="banner ${cls}">${text}</div>`; };
-  const env = (extra) => {
-    document.getElementById('env').innerHTML =
-      `目前在：<b>${host}</b>｜${os}<br>` + extra +
-      `<br><span class="tiny">UA：${ua.replace(/</g, '&lt;')}</span>`;
-  };
-
-  const newRun = () => `${os}-${host}-${Date.now().toString(36).slice(-4)}`;
-  const url = (params) => { const u = new URL(base); Object.entries(params).forEach(([k, v]) => v && u.searchParams.set(k, v)); return u.href; };
-
-  // ---------- 主流程 ----------
-  const main = document.getElementById('main');
-  const ask = (title, opts, onPick) => {
-    const d = document.createElement('div'); d.className = 'card';
-    d.innerHTML = `<b>${title}</b>`;
-    opts.forEach(o => { const b = document.createElement('button'); b.className = 'sub'; b.textContent = o;
-      b.onclick = () => { d.querySelectorAll('button').forEach(x => x.className = 'sub'); b.className = 'sel'; onPick(o); };
-      d.appendChild(b); });
-    const i = document.createElement('input'); i.placeholder = '補充（選填，寫完按別處就記下）';
-    i.onchange = () => onPick(null, i.value); d.appendChild(i);
-    main.appendChild(d);
-  };
-
-  async function start() {
-    if (!liffId) { env(''); banner('err', '還沒設定 LIFF ID：展開最下面的「設定」填入'); render(); return; }
-    let init = '成功', err = '';
-    try { await liff.init({ liffId }); } catch (e) { init = '失敗'; err = e.code + ' ' + e.message; }
-    const inClient = init === '成功' ? liff.isInClient() : '-';
-    const loggedIn = init === '成功' ? liff.isLoggedIn() : false;
-    let who = '-';
-    if (loggedIn) {
-      try { const p = await liff.getProfile(); who = '…' + p.userId.slice(-6); }
-      catch (e) { try { who = '…' + (liff.getDecodedIDToken() || {}).sub.slice(-6); } catch (e2) { who = '登入了但讀不到身分'; } }
-    }
-    let friend = '-';
-    if (loggedIn) { try { friend = (await liff.getFriendship()).friendFlag ? '是好友' : '不是好友'; } catch (e) { friend = '讀不到'; } }
-
-    env(`LIFF 初始化：${init}${err ? '（' + err + '）' : ''}｜LIFF 瀏覽器：${inClient}｜已登入：${loggedIn ? '是 ' + who : '否'}｜好友：${friend}｜可存資料：${storageOk ? '是' : '否'}`);
-
-    // ---------- 從某一輪回來 ----------
-    if (run && m) {
-      const secs = t ? Math.round((Date.now() - t) / 1000) : '-';
-      const sameBrowser = load('lt_run') === run;  // 存在這個瀏覽器的編號還在 → 回到同一個瀏覽器
-      const fbKept = fbclid ? (fbclid === (savedFb || fbclid) ? '網址上還在' : '和存的不一樣') : '網址上不見了';
-      const fbStored = savedFb ? '這個瀏覽器有存' : '這個瀏覽器沒存';
-      add({ 輪: run, 做法: m === 'A' ? 'A 在這裡登入' : 'B 跳進 LINE', 結果: loggedIn ? '已登入 ' + who : '沒登入', 回到同一個瀏覽器: sameBrowser ? '是' : '否', 點擊參數: fbKept + '、' + fbStored, 花費秒數: secs, 好友: friend });
-      banner(loggedIn ? 'ok' : 'err', loggedIn
-        ? `第 ${run} 輪做法 ${m}：已登入（${who}），${sameBrowser ? '回到原本的瀏覽器' : '換到另一個瀏覽器或 App 了'}，花 ${secs} 秒。回答下面的問題，再複製結果。`
-        : `第 ${run} 輪做法 ${m}：回到這頁但沒登入。回答下面的問題，再複製結果。`);
-      ask('剛才按下去後看到了什麼？（可複選，按最接近的）', [
-        '直接跳到 LINE App 又自動回來（沒輸入任何東西）',
-        '出現「以此帳號繼續」之類的確認頁',
-        '要輸入 email 和密碼',
-        '要掃 QR code',
-        '有加好友的勾選',
-        '跳到 LINE App 後停在那裡沒回來',
-        '跳到 Safari、Chrome 等其他瀏覽器',
-        '出現錯誤或被擋',
-      ], (o, note) => add({ 輪: run, 看到: o || '', 補充: note || '' }));
-      render(); return;
-    }
-
-    // ---------- 新的一輪 ----------
-    render();
-    if (fbclid) banner('ok', `點擊參數已存：${fbclid}`);
-    else banner('warn', '網址上沒有 fbclid。正式測試請用測試說明裡的連結打開（結尾有 ?fbclid=）');
-
-    const box = document.createElement('div'); box.className = 'card';
-    box.innerHTML = `<b>這一輪只按一個</b><div class="how">A 和 B 要分開兩輪做：做完一輪，按最下面「重設」，並照測試說明清掉 App 的瀏覽資料，再從原本的地方重新點連結。</div>`;
-    const bA = document.createElement('button'); bA.textContent = 'A：在這裡用 LINE 登入';
-    bA.onclick = () => {
-      const r = newRun(); save('lt_run', r);
-      add({ 輪: r, 做法: 'A 在這裡登入', 動作: '按下 A', 點擊參數: fbclid || '無' });
-      liff.login({ redirectUri: url({ run: r, m: 'A', t: Date.now(), fbclid, liff: liffId }) });
-    };
-    const bB = document.createElement('button'); bB.textContent = 'B：跳進 LINE 再登入';
-    bB.onclick = () => {
-      const r = newRun(); save('lt_run', r);
-      add({ 輪: r, 做法: 'B 跳進 LINE', 動作: '按下 B', 點擊參數: fbclid || '無' });
-      const u = new URL(`https://liff.line.me/${liffId}`);
-      u.searchParams.set('run', r); u.searchParams.set('m', 'B'); u.searchParams.set('t', Date.now()); if (fbclid) u.searchParams.set('fbclid', fbclid);
-      location.href = u.href;
-    };
-    box.append(bA, bB);
-    if (loggedIn) {
-      const n = document.createElement('div'); n.className = 'banner warn';
-      n.textContent = '這個瀏覽器已經是登入狀態。若是「第二次打開」那一輪，這就是結果：複製紀錄即可；否則先按最下面「重設」。';
-      box.prepend(n);
-      add({ 輪: '再次打開', 結果: '不用登入就是登入狀態 ' + who, 點擊參數: fbclid || '無' });
-    }
-    main.appendChild(box);
+  // ---------- 首頁：列出 10 項，按 App 分組 ----------
+  function hub() {
+    let h = `<h1>LINE 外登入測試</h1>
+      <p class="what">你的手機：<b>${os}</b>。一個 App 做完再換下一個，每支手機做 10 項。</p>
+      <div class="box wait">每做完一項，畫面最後會有「複製結果」，貼回給 Claude（截圖也可以）。</div>`;
+    ['FB', 'IG', 'TT', 'WEB'].forEach(a => {
+      const cs = CASES.filter(c => c.app === a);
+      const text = cs.map(c => `測試${c.n}：${KIND[c.kind]}\n${linkOf(c)}`).join('\n\n');
+      h += `<div class="card"><h2>${APPS[a].name}（測試 ${cs[0].n}${cs.length > 1 ? '～' + cs[cs.length - 1].n : ''}）</h2><ol>`;
+      if (a === 'WEB') {
+        h += `<li>確認你現在是用 Safari（iPhone）或 Chrome（Android）打開這頁，不是在 LINE 或其他 App 裡</li><li>按下面的按鈕</li></ol>
+          <a class="big dark" href="${esc(linkOf(cs[0]))}">開始測試 10</a>`;
+      } else {
+        h += `<li>按「複製 ${APPS[a].name} 的連結」</li><li>${APPS[a].put}</li><li>照順序點：測試 ${cs[0].n} → 測試 ${cs[1].n} → 測試 ${cs[2].n}</li>
+          <li>點測試 ${cs[1].n} 之前，先把 ${APPS[a].name} 裡開著的網頁關掉</li></ol>
+          <button class="big dark" data-copy="${esc(text)}">複製 ${APPS[a].name} 的連結</button>`;
+      }
+      h += `</div>`;
+    });
+    app.innerHTML = h;
+    app.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copy(b.dataset.copy, b, '✅ 已複製，去貼上'));
   }
 
-  document.getElementById('reset').onclick = () => {
-    try { if (window.liff && liff.isLoggedIn && liff.isLoggedIn()) liff.logout(); } catch (e) {}
-    const keep = load('lt_liff');
-    try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}
-    if (keep) save('lt_liff', keep);
-    location.href = base + (fbclid ? '?fbclid=' + encodeURIComponent(fbclid) : '');
-  };
+  // ---------- 單項測試 ----------
+  function header(c) {
+    return `<span class="no">測試 ${c.n}／10</span>
+      <div class="where">${APPS[c.app].name}：${KIND[c.kind]}</div>`;
+  }
+  function wrongPlace(c, want) {
+    app.innerHTML = header(c) + `<div class="box bad"><div class="line"><b>❌ 打開的地方不對</b></div>
+      現在是在 <b>${hereName}</b> 打開的，這一項要在 <b>${want}</b> 打開。<br><br>請回到 ${want}，從那裡點測試 ${c.n} 的連結。</div>`;
+  }
+  function result(c, checks, question, extra) {
+    const allAuto = checks.every(x => x[1]);
+    const lines = checks.map(([label, ok]) => `<div class="line">${ok ? '✅' : '❌'} ${label}</div>`).join('');
+    app.innerHTML = header(c) + `<div class="box ${allAuto ? 'ok' : 'bad'}">${lines}${extra ? `<div class="line">⏱ ${extra}</div>` : ''}</div>
+      ${question ? `<div class="card"><h2>${question.q}</h2><div id="opts"></div></div>` : ''}
+      <div id="final"></div>`;
+    const finish = (answer) => {
+      const pass = allAuto && (!question || question.good.includes(answer));
+      const text = `測試${c.n} ${c.id}｜${os}｜${pass ? '通過' : '沒通過'}｜` + checks.map(([l, ok]) => `${l}${ok ? '✅' : '❌'}`).join(' ') +
+        (extra ? `｜${extra}` : '') + (answer ? `｜看到：${answer}` : '') + `｜UA：${ua}`;
+      document.getElementById('final').innerHTML = `<div class="verdict ${pass ? 'ok' : 'bad'}">${pass ? '✅ 這一項通過' : '❌ 這一項沒通過'}</div>
+        <button class="big dark" id="cp">📋 複製結果，貼回給 Claude</button>
+        <p class="note">複製不了就直接截圖這個畫面。${c.n < 10 ? `接著做測試 ${c.n + 1}。` : '全部做完了，謝謝！'}</p>`;
+      document.getElementById('cp').onclick = (e) => copy(text, e.target, '✅ 已複製，貼回給 Claude');
+    };
+    if (!question) return finish('');
+    const box = document.getElementById('opts');
+    question.opts.forEach(o => {
+      const b = document.createElement('button'); b.className = 'big gray'; b.textContent = o;
+      b.onclick = () => { box.querySelectorAll('button').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); finish(o); };
+      box.appendChild(b);
+    });
+  }
 
-  start();
+  async function test(c, q) {
+    const back = q.get('s') === 'back';
+    const t = Number(q.get('t') || 0);
+    const secs = t ? Math.round((Date.now() - t) / 1000) + ' 秒' : '';
+    const fb = q.get('fbclid');
+    const want = c.app === 'WEB' ? 'Safari 或 Chrome' : APPS[c.app].name + ' 裡';
+    const loggedIn = liff.isLoggedIn();
+
+    // A：在 App 裡直接登入
+    if (c.kind === 'A' && !back) {
+      if (here !== c.app) return wrongPlace(c, want);
+      if (loggedIn) liff.logout();  // 從登出開始
+      save('lt_' + c.app, c.id);    // 記號：回來時看是不是同一個瀏覽器
+      app.innerHTML = header(c) + `<div class="box ok"><div class="line">✅ 打開的地方對了：${hereName}</div></div>
+        <button class="big" id="go">👉 按這裡：用 LINE 登入</button>
+        <ol class="note"><li>按下去後照畫面做。要你按「登入」、輸入帳號密碼或掃 QR code，都照做完成</li>
+        <li>登入完應該會自動回到這一頁，看到結果</li>
+        <li>如果停在 LINE 回不來，在 Claude 對話裡打「測試 ${c.n} 回不來」</li></ol>`;
+      document.getElementById('go').onclick = () => liff.login({ redirectUri: linkOf(c, { s: 'back', t: Date.now() }) });
+      return;
+    }
+    if (c.kind === 'A' && back) {
+      return result(c, [
+        ['登入成功', loggedIn],
+        [`回到 ${want}`, here === c.app && load('lt_' + c.app) === c.id],
+        ['點擊參數還在', fb === 'TEST-' + c.id],
+      ], { q: '剛剛登入時，畫面要你做什麼？', good: ['什麼都不用做，自動就回來了', '只要按一個「登入」或「繼續」'],
+           opts: ['什麼都不用做，自動就回來了', '只要按一個「登入」或「繼續」', '要輸入 email 和密碼', '要掃 QR code', '跳去別的 App 或瀏覽器了'] }, secs);
+    }
+
+    // again：再打開一次
+    if (c.kind === 'again') {
+      if (here !== c.app) return wrongPlace(c, want);
+      return result(c, [
+        ['做過前一項（同一個瀏覽器）', !!load('lt_' + c.app)],
+        ['不用再登入就認得你', loggedIn],
+      ], null);
+    }
+
+    // B：跳進 LINE
+    if (c.kind === 'B' && !back) {
+      if (here !== c.app) return wrongPlace(c, want);
+      app.innerHTML = header(c) + `<div class="box ok"><div class="line">✅ 打開的地方對了：${hereName}</div></div>
+        <button class="big" id="go">👉 按這裡：跳進 LINE</button>
+        <ol class="note"><li>按下去後應該會打開 LINE，在 LINE 裡看到結果</li>
+        <li>按了 10 秒都沒反應，在 Claude 對話裡打「測試 ${c.n} 沒跳」</li></ol>`;
+      document.getElementById('go').onclick = () => {
+        const u = new URL(`https://liff.line.me/${LIFF_ID}`);
+        u.searchParams.set('case', c.id); u.searchParams.set('s', 'back'); u.searchParams.set('t', Date.now()); u.searchParams.set('fbclid', 'TEST-' + c.id);
+        location.href = u.href;
+      };
+      return;
+    }
+    if (c.kind === 'B' && back) {
+      return result(c, [
+        ['已經在 LINE 裡', liff.isInClient()],
+        ['認得你（不用登入）', loggedIn],
+        ['點擊參數有帶進來', fb === 'TEST-' + c.id],
+      ], { q: '跳進 LINE 時，畫面要你做什麼？', good: ['什麼都不用按，直接進來', '只按了一個「開啟」或「同意」'],
+           opts: ['什麼都不用按，直接進來', '只按了一個「開啟」或「同意」', '要按好幾步', '其他'] }, secs);
+    }
+  }
+
+  (async () => {
+    try { await liff.init({ liffId: LIFF_ID }); }
+    catch (e) { app.innerHTML = `<div class="box bad"><b>❌ 測試頁壞了</b><br>把這段截圖給 Claude：${esc(e.code + ' ' + e.message)}</div>`; return; }
+    const q = new URLSearchParams(location.search);  // LIFF 初始化後才讀，跳進 LINE 時參數這時才回來
+    const c = CASES.find(x => x.id === q.get('case'));
+    c ? test(c, q) : hub();
+  })();
 </script>
 </body>
 </html>
